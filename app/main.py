@@ -18,7 +18,7 @@ lambda_handler=Mangum(app)
 
 @app.get("/",tags=["Home Page"])
 def home():
-    return {"Welcome": "Welcome to the CI CD Testing FastAPI"}
+    return {"Welcome": "Welcome to the CI CD FastAPI"}
 
 
 app.include_router(api_router, prefix="/api")
