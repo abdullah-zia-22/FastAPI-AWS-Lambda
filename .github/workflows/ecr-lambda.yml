@@ -1,0 +1,43 @@
+name: Deploy Lambda Function ECR
+
+on:
+  push:
+    branches:
+      - ecr
+  workflow_dispatch:
+
+jobs:
+  Deploy-ECR-Lambda:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Push Amazon ECR
+        run: |
+            aws ecr get-login-password | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+            docker build --platform linux/arm64 -t ${{ secrets.IMAGE_NAME }} .
+            docker tag ${{ secrets.IMAGE_NAME }}:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.ECR_REPO }}:latest
+            docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.ECR_REPO }}:latest
+
+      - name: Update Lambda Function
+        run: |
+            repository_uri=$(aws ecr describe-repositories --repository-name ${{ secrets.ECR_REPO }} --region ${{ secrets.AWS_REGION }} --query 'repositories[0].repositoryUri' --output text)
+            image_digest=$(aws ecr describe-images --repository-name ${{ secrets.ECR_REPO }} --region ${{ secrets.AWS_REGION }} --query 'sort_by(imageDetails,& imagePushedAt)[-1].imageDigest' --output text)
+            image_uri="$repository_uri@$image_digest"
+            
+            echo $image_uri
+            aws lambda update-function-code --function-name ${{ secrets.LAMBDA_FUNCTION }} --image-uri $image_uri

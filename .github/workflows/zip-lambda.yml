@@ -1,0 +1,57 @@
+name: Deploy Lambda Function Zip
+
+on:
+  push:
+    branches:
+      - zip
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Deploy-Zip-Lambda
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v2
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.9
+
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt -t env
+
+    - name: Zip code
+      run: |
+        cd env
+        zip -r9 ../${{ secrets.S3_KEY }} .
+        cd ..
+        zip -r ${{ secrets.S3_KEY }} app/*
+
+      
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Update Lambda function
+      run: |  
+        S3_BUCKET=${{ secrets.S3_BUCKET }}
+        S3_KEY=${{ secrets.S3_KEY }}
+
+        # Upload the updated zip to S3
+        aws s3 cp ${{ secrets.S3_KEY }} s3://$S3_BUCKET/$S3_KEY
+
+        # Update Lambda function code
+        aws ecr get-login-password | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+        aws lambda update-function-code --function-name ${{ secrets.LAMBDA_FUNCTION }} --s3-bucket $S3_BUCKET --s3-key $S3_KEY
+
+    - name: Cleanup
+      run: |
+        rm ${{ secrets.S3_KEY }}
+        rm -r env
