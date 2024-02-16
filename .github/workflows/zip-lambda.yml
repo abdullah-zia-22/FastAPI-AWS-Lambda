@@ -47,12 +47,12 @@ jobs:
         # Upload the updated zip to S3
         aws s3 cp ${{ secrets.S3_KEY }} s3://$S3_BUCKET/$S3_KEY
 
+        # Change Lambda function handler
+        aws lambda update-function-configuration --function-name ${{ secrets.LAMBDA_FUNCTION }} --handler app.main.lambda_handler
+
         # Update Lambda function code
         aws ecr get-login-password | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
         aws lambda update-function-code --function-name ${{ secrets.LAMBDA_FUNCTION }} --s3-bucket $S3_BUCKET --s3-key $S3_KEY
-
-        # Change Lambda function handler
-        aws lambda update-function-configuration --function-name ${{ secrets.LAMBDA_FUNCTION }} --handler app.main.lambda_handler
 
     - name: Cleanup
       run: |
